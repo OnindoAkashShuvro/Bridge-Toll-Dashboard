@@ -1,0 +1,8 @@
+streamlit>=1.50
+pandas>=2.0
+plotly>=5.20
+gurobipy>=11.0      # ships with a free size-limited license, enough for this model
+pyomo>=6.7
+highspy>=1.7        # open-source MIP solver used through Pyomo
+docplex>=2.28       # IBM CPLEX modeling layer
+cplex>=22.1         # CPLEX Community Edition (size-limited), enough for this model
