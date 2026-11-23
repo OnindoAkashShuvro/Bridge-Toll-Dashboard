@@ -47,6 +47,25 @@ def styled(fig, title=None, h=430):
     return fig
 
 
+# chart view controls: zoom/pan is off by default so touching a chart cannot move it;
+# with zoom on, the toolbar "Reset axes" button or a double-click restores the original view
+if "chart_reset" not in st.session_state:
+    st.session_state.chart_reset = 0
+
+
+def chart(where, fig, width="stretch", key=None):
+    zoom = st.session_state.get("allow_zoom", False)
+    if not zoom:
+        fig.update_layout(dragmode=False)
+        fig.update_xaxes(fixedrange=True)
+        fig.update_yaxes(fixedrange=True)
+    cfg = {"displayModeBar": True, "displaylogo": False, "scrollZoom": False, "doubleClick": "reset",
+           "modeBarButtonsToRemove": ["lasso2d", "select2d"] + ([] if zoom else ["zoom2d", "pan2d", "zoomIn2d",
+                                                                                  "zoomOut2d", "autoScale2d"])}
+    k = f"{key or fig.layout.title.text}-{st.session_state.chart_reset}"
+    where.plotly_chart(fig, width=width, config=cfg, key=k)
+
+
 def csv_bytes(df):
     return df.to_csv(index=False).encode("utf-8")
 
@@ -70,6 +89,12 @@ if missing:
 scen = sb.multiselect("Scenarios", [1, 2, 3], default=[1, 2, 3], format_func=lambda s: tm.SCENARIOS[s])
 eps_txt = sb.text_input("Present-bias weights ε (comma-separated; 1 = no bias)", "1.0, 0.5, 0.2")
 toll_txt = sb.text_input("Allowed toll levels ($, comma-separated; include 0 for 'no toll')", "0, 1, 2, 3, 4")
+
+sb.toggle("Allow zoom and pan on charts", value=False, key="allow_zoom",
+          help="Off: charts stay fixed when touched. On: drag to zoom; double-click a chart or use "
+               "the toolbar's Reset axes button to go back.")
+if sb.button("↺ Reset all charts to original view"):
+    st.session_state.chart_reset += 1
 
 with sb.expander("Time and money", expanded=False):
     H = st.number_input("Horizon H (years)", 1, 60, d.H)
@@ -212,7 +237,7 @@ with tab1:
                 fig.add_vline(x=k * params.eta - 0.5, line_dash="dot", line_color="#555555")
             fig.update_yaxes(title="Toll ($)", range=[-0.3, max(params.tolls) + 0.5])
             fig.update_xaxes(title="Year (dotted lines: new administration)")
-            left.plotly_chart(styled(fig, "Toll path by ε (lines slightly offset so overlaps stay visible)", 400),
+            chart(left, styled(fig, "Toll path by ε (lines slightly offset so overlaps stay visible)", 400),
                               width="stretch", key=f"path{sc}")
 
             vals = summ[(summ.scenario == tm.SCENARIOS[sc])].dropna(subset=["value_eps1"])
@@ -222,7 +247,7 @@ with tab1:
                 text=[f"${v/1e6:,.1f}M" for v in vals.value_eps1], textposition="outside"))
             fig.update_yaxes(title="$M" + (" less total cost" if sc == 3 else ""))
             fig.update_layout(showlegend=False)
-            right.plotly_chart(styled(fig, "Value of the plan, judged without bias (ε = 1)", 400),
+            chart(right, styled(fig, "Value of the plan, judged without bias (ε = 1)", 400),
                                width="stretch", key=f"val{sc}")
 
 # ------------------------------------------------------------------------- tab 2: detail
@@ -248,14 +273,14 @@ with tab2:
                    marker_color=COLORS[3])
         f1.add_scatter(x=df.year, y=df.profit / M, name="Profit", mode="lines+markers", line_color=COLORS[2])
         f1.update_layout(barmode="relative"); f1.update_yaxes(title="$M per year")
-        l.plotly_chart(styled(f1, "Money each year"), width="stretch")
+        chart(l, styled(f1, "Money each year"), width="stretch")
 
         f2 = go.Figure()
         f2.add_scatter(x=df.year, y=df.bridge_crossings / M, name="Bridge crossings, with toll", line_color=COLORS[0])
         f2.add_scatter(x=df.year, y=df.bridge_crossings_no_toll / M, name="Bridge crossings, no toll",
                        line=dict(color=COLORS[1], dash="dash"))
         f2.update_yaxes(title="Million crossings per year")
-        r_.plotly_chart(styled(f2, "Bridge traffic"), width="stretch")
+        chart(r_, styled(f2, "Bridge traffic"), width="stretch")
 
         l, r_ = st.columns(2)
         f3 = go.Figure()
@@ -264,7 +289,7 @@ with tab2:
         f3.add_scatter(x=df.year, y=df.peak_bridge_vph_no_toll + df.peak_free_route_vph_no_toll,
                        name="Total trips, no toll", mode="lines", line=dict(color="#FFFFFF", dash="dot"))
         f3.update_layout(barmode="stack"); f3.update_yaxes(title="Vehicles per peak hour")
-        l.plotly_chart(styled(f3, "Peak-hour route split (equilibrium)"), width="stretch")
+        chart(l, styled(f3, "Peak-hour route split (equilibrium)"), width="stretch")
 
         f4 = go.Figure()
         f4.add_scatter(x=df.year, y=(df.TC - df.TC_no_toll) / M, name="Δ TC (trips made)", line_color=COLORS[0])
@@ -273,14 +298,14 @@ with tab2:
         f4.add_scatter(x=df.year, y=df.consumer_surplus_change / M, name="Δ consumer surplus",
                        line=dict(color=COLORS[4], dash="dash"))
         f4.update_yaxes(title="$M per year, vs no toll")
-        r_.plotly_chart(styled(f4, "Traveler costs vs no toll"), width="stretch")
+        chart(r_, styled(f4, "Traveler costs vs no toll"), width="stretch")
 
         f5 = go.Figure()
         f5.add_bar(x=df.year, y=df.payoff_G / M, name="Yearly payoff G", marker_color=COLORS[0])
         disc = (1 / (1 + params.r)) ** df.year
         f5.add_scatter(x=df.year, y=(df.payoff_G * disc).cumsum() / M, name="Cumulative PV", line_color="#FFFFFF")
         f5.update_yaxes(title="$M")
-        st.plotly_chart(styled(f5, f"Scenario payoff ({tm.SCENARIOS[sel[0]]}) vs no toll"), width="stretch")
+        chart(st, styled(f5, f"Scenario payoff ({tm.SCENARIOS[sel[0]]}) vs no toll"), width="stretch")
 
         st.dataframe(df, hide_index=True, width="stretch")
         st.download_button("⬇ Download this case, year by year (CSV)", csv_bytes(df),
@@ -328,13 +353,13 @@ with tab3:
         fa.add_vline(x=tau, line_dash="dot", line_color="#888888")
         fa.update_xaxes(title="Toll ($)"); fa.update_yaxes(title="$M this year (no capital cost)")
         fa.update_layout(showlegend=sc == 1)
-        cols[i].plotly_chart(styled(fa, f"Year {yy}, {nm}", 420), width="stretch", key=f"sweep{sc}")
+        chart(cols[i], styled(fa, f"Year {yy}, {nm}", 420), width="stretch", key=f"sweep{sc}")
     fb = go.Figure()
     fb.add_scatter(x=sw.toll, y=sw.peak_bridge, name="Bridge", stackgroup="one", line_color=COLORS[0])
     fb.add_scatter(x=sw.toll, y=sw.peak_free, name="Free route", stackgroup="one", line_color=COLORS[1])
     fb.add_vline(x=tau, line_dash="dot", line_color="#888888")
     fb.update_xaxes(title="Toll ($)"); fb.update_yaxes(title="Vehicles per peak hour")
-    st.plotly_chart(styled(fb, f"Year {yy}: peak-hour route split vs toll"), width="stretch")
+    chart(st, styled(fb, f"Year {yy}: peak-hour route split vs toll"), width="stretch")
     st.download_button("⬇ Download toll sweep (CSV)", csv_bytes(sw), f"toll_sweep_year{yy}.csv", "text/csv")
 
 # ------------------------------------------------------------------------- tab 4: model

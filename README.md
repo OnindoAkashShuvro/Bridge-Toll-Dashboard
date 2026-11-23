@@ -52,6 +52,8 @@ You can remove any solver line from `requirements.txt` you don't want; the app f
 3. **One-year explorer**: pick a year and a toll to see the equilibrium and each scenario's payoff as the toll varies.
 4. **Model**: the equations and the MIP.
 
+**Chart view.** Charts stay fixed when touched. Turn on *Allow zoom and pan on charts* in the sidebar to zoom; then double-click a chart, use the toolbar's **Reset axes** button, or click **↺ Reset all charts to original view** to go back.
+
 ## How the optimization works
 
 The traffic equilibrium (elastic demand, BPR travel times) is solved in Python by bisection for every
