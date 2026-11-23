@@ -13,13 +13,18 @@ st.set_page_config(page_title="Bridge Toll Optimization", page_icon="🌉", layo
 # ------------------------------------------------------------------------- black / white styling
 st.markdown("""
 <style>
+html { font-size: 19px; }
+[data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li, label, [data-testid="stWidgetLabel"] p { font-size: 1.05rem !important; }
+[data-testid="stCaptionContainer"] { font-size: 0.95rem !important; }
+[data-testid="stMetricValue"], [data-testid="stMetricValue"] [data-testid="stMarkdownContainer"] p, [data-testid="stMetricValue"] div { font-size: 2.1rem !important; }
+.stTabs [data-baseweb="tab"] p { font-size: 1.15rem !important; }
 html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], .main, .block-container {
     background-color: #000000 !important; color: #FFFFFF !important; }
 [data-testid="stSidebar"], [data-testid="stSidebar"] > div { background-color: #0b0b0b !important; }
 h1, h2, h3, h4, h5, h6, p, label, span, li, div, .stMarkdown { color: #FFFFFF; }
 [data-testid="stMetricValue"], [data-testid="stMetricLabel"] { color: #FFFFFF !important; }
 [data-testid="stMetric"] { background:#111111; border:1px solid #2a2a2a; border-radius:8px; padding:10px 14px; }
-input, textarea, [data-baseweb="select"] > div { background-color:#141414 !important; color:#FFFFFF !important; }
+input, textarea, [data-baseweb="select"] > div { background-color:#141414 !important; color:#FFFFFF !important; font-size:1rem !important; }
 .stTabs [data-baseweb="tab"] { color:#FFFFFF; }
 .stDownloadButton button, .stButton button { background:#141414; color:#FFFFFF; border:1px solid #4FA3FF; }
 .stDownloadButton button:hover, .stButton button:hover { background:#4FA3FF; color:#000000; }
@@ -28,8 +33,8 @@ code { color:#9fd0ff; background:#111111; }
 """, unsafe_allow_html=True)
 
 PLOT = dict(template="plotly_dark", paper_bgcolor="#000000", plot_bgcolor="#000000",
-            font=dict(color="#FFFFFF"), legend=dict(bgcolor="rgba(0,0,0,0)", orientation="h", yanchor="top", y=-0.18, x=0),
-            margin=dict(l=10, r=10, t=50, b=40))
+            font=dict(color="#FFFFFF", size=16), title_font=dict(size=20), legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(size=15), orientation="h", yanchor="top", y=-0.3, x=0),
+            margin=dict(l=10, r=10, t=60, b=70))
 COLORS = ["#4FA3FF", "#FFB347", "#7CE38B", "#FF6B8B", "#C49BFF", "#5FE0E0"]
 LABEL = {"gurobi": "Gurobi (gurobipy)", "pyomo": "Pyomo + HiGHS (open source)",
          "cplex": "IBM CPLEX (docplex)", "enumeration": "Enumeration (check, no solver)"}
@@ -37,8 +42,8 @@ LABEL = {"gurobi": "Gurobi (gurobipy)", "pyomo": "Pyomo + HiGHS (open source)",
 
 def styled(fig, title=None, h=430):
     fig.update_layout(**PLOT, height=h, title=title)
-    fig.update_xaxes(gridcolor="#222222", zerolinecolor="#444444")
-    fig.update_yaxes(gridcolor="#222222", zerolinecolor="#444444")
+    fig.update_xaxes(gridcolor="#222222", zerolinecolor="#444444", tickfont=dict(size=15), title_font=dict(size=17))
+    fig.update_yaxes(gridcolor="#222222", zerolinecolor="#444444", tickfont=dict(size=15), title_font=dict(size=17))
     return fig
 
 
@@ -185,36 +190,40 @@ with tab1:
     st.download_button("⬇ Download results (CSV)", csv_bytes(summ), "toll_results_summary.csv", "text/csv")
 
     if plans:
-        tp = []
-        for (sc, e), pl in plans.items():
-            for y in range(params.H):
-                tp.append(dict(year=y, toll=pl[y // params.eta], case=f"{tm.SCENARIOS[sc]}, ε={e:g}"))
-        tp = pd.DataFrame(tp)
-        fig = go.Figure()
-        dashes = ["solid", "dash", "dot", "dashdot", "longdash", "longdashdot"]
-        eps_idx = {e: i for i, e in enumerate(sorted({e for _, e in plans}, reverse=True))}
-        for i, ((sc, e), pl) in enumerate(plans.items()):
-            case = f"{tm.SCENARIOS[sc]}, ε={e:g}"
-            grp = tp[tp.case == case]
-            fig.add_trace(go.Scatter(x=grp.year, y=grp.toll + 0.04 * (i - len(plans) / 2), name=case,
-                                     mode="lines", line=dict(shape="hv", width=3, color=COLORS[(sc - 1) % len(COLORS)],
-                                                             dash=dashes[eps_idx[e] % len(dashes)]),
-                                     customdata=grp.toll, hovertemplate="year %{x}: $%{customdata}<extra>" + case + "</extra>"))
-        for k in range(1, params.K):
-            fig.add_vline(x=k * params.eta - 0.5, line_dash="dot", line_color="#555555")
-        fig.update_yaxes(title="Toll ($)")
-        fig.update_xaxes(title="Year (dotted lines: new administration)")
-        st.plotly_chart(styled(fig, "Toll path (color = scenario, line style = ε; lines slightly offset so overlaps stay visible)", 500),
-                        width="stretch")
+        st.subheader("Charts by scenario")
+        eps_all = sorted({e for _, e in plans}, reverse=True)
+        eps_color = {e: COLORS[i % len(COLORS)] for i, e in enumerate(eps_all)}
+        for sc in scen:
+            cases = [(e, pl) for (s_, e), pl in plans.items() if s_ == sc]
+            st.markdown(f"#### Scenario {tm.SCENARIOS[sc]}")
+            if not cases:
+                st.warning("No feasible plan for this scenario.")
+                continue
+            left, right = st.columns([3, 2])
+            fig = go.Figure()
+            for i, (e, pl) in enumerate(cases):
+                yrs = list(range(params.H))
+                tolls_y = [pl[y // params.eta] for y in yrs]
+                fig.add_trace(go.Scatter(
+                    x=yrs, y=[t + 0.05 * (i - (len(cases) - 1) / 2) for t in tolls_y], name=f"ε={e:g}",
+                    mode="lines", line=dict(shape="hv", width=3, color=eps_color[e]),
+                    customdata=tolls_y, hovertemplate="year %{x}: $%{customdata}<extra>ε=" + f"{e:g}" + "</extra>"))
+            for k in range(1, params.K):
+                fig.add_vline(x=k * params.eta - 0.5, line_dash="dot", line_color="#555555")
+            fig.update_yaxes(title="Toll ($)", range=[-0.3, max(params.tolls) + 0.5])
+            fig.update_xaxes(title="Year (dotted lines: new administration)")
+            left.plotly_chart(styled(fig, "Toll path by ε (lines slightly offset so overlaps stay visible)", 400),
+                              width="stretch", key=f"path{sc}")
 
-        vals = summ.dropna(subset=["value_eps1"]).copy()
-        vals["case"] = vals["scenario"]
-        vals["ε"] = vals["eps"].map(lambda e: f"ε={e:g}")
-        vals["value ($M)"] = vals["value_eps1"] / 1e6
-        fig = px.bar(vals, x="case", y="value ($M)", color="ε", barmode="group",
-                     color_discrete_sequence=COLORS)
-        fig.update_xaxes(title="")
-        st.plotly_chart(styled(fig, "Value of the chosen plan, judged without bias (ε = 1)"), width="stretch")
+            vals = summ[(summ.scenario == tm.SCENARIOS[sc])].dropna(subset=["value_eps1"])
+            fig = go.Figure(go.Bar(
+                x=[f"ε={e:g}" for e in vals.eps], y=vals.value_eps1 / 1e6,
+                marker_color=[eps_color[e] for e in vals.eps],
+                text=[f"${v/1e6:,.1f}M" for v in vals.value_eps1], textposition="outside"))
+            fig.update_yaxes(title="$M" + (" less total cost" if sc == 3 else ""))
+            fig.update_layout(showlegend=False)
+            right.plotly_chart(styled(fig, "Value of the plan, judged without bias (ε = 1)", 400),
+                               width="stretch", key=f"val{sc}")
 
 # ------------------------------------------------------------------------- tab 2: detail
 with tab2:
@@ -308,20 +317,24 @@ with tab3:
                           welfare=(m.G(2, oo, yy)) / M, total_cost_saving=m.G(3, oo, yy) / M,
                           peak_bridge=oo["peak_bridge_vph"], peak_free=oo["peak_free_vph"]))
     sw = pd.DataFrame(sweep)
-    l, r_ = st.columns(2)
-    fa = go.Figure()
-    for i, (col, nm) in enumerate([("profit", "S1 profit"), ("welfare", "S2 welfare gain"),
-                                   ("total_cost_saving", "S3 total-cost saving"), ("revenue", "Revenue")]):
-        fa.add_scatter(x=sw.toll, y=sw[col], name=nm, line_color=COLORS[i])
-    fa.add_vline(x=tau, line_dash="dot", line_color="#888888")
-    fa.update_xaxes(title="Toll ($)"); fa.update_yaxes(title="$M in this year (no capital cost)")
-    l.plotly_chart(styled(fa, f"Year {yy}: payoffs vs toll"), width="stretch")
+    cols = st.columns(3)
+    for i, (col, nm, sc) in enumerate([("profit", "Scenario 1: operator profit", 1),
+                                       ("welfare", "Scenario 2: welfare gain", 2),
+                                       ("total_cost_saving", "Scenario 3: total-cost saving", 3)]):
+        fa = go.Figure()
+        fa.add_scatter(x=sw.toll, y=sw[col], name=nm, line=dict(color=COLORS[i], width=3))
+        if sc == 1:
+            fa.add_scatter(x=sw.toll, y=sw.revenue, name="Revenue", line=dict(color="#FFFFFF", dash="dash"))
+        fa.add_vline(x=tau, line_dash="dot", line_color="#888888")
+        fa.update_xaxes(title="Toll ($)"); fa.update_yaxes(title="$M this year (no capital cost)")
+        fa.update_layout(showlegend=sc == 1)
+        cols[i].plotly_chart(styled(fa, f"Year {yy}, {nm}", 420), width="stretch", key=f"sweep{sc}")
     fb = go.Figure()
     fb.add_scatter(x=sw.toll, y=sw.peak_bridge, name="Bridge", stackgroup="one", line_color=COLORS[0])
     fb.add_scatter(x=sw.toll, y=sw.peak_free, name="Free route", stackgroup="one", line_color=COLORS[1])
     fb.add_vline(x=tau, line_dash="dot", line_color="#888888")
     fb.update_xaxes(title="Toll ($)"); fb.update_yaxes(title="Vehicles per peak hour")
-    r_.plotly_chart(styled(fb, f"Year {yy}: peak-hour route split vs toll"), width="stretch")
+    st.plotly_chart(styled(fb, f"Year {yy}: peak-hour route split vs toll"), width="stretch")
     st.download_button("⬇ Download toll sweep (CSV)", csv_bytes(sw), f"toll_sweep_year{yy}.csv", "text/csv")
 
 # ------------------------------------------------------------------------- tab 4: model

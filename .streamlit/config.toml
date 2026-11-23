@@ -5,6 +5,7 @@ secondaryBackgroundColor = "#141414"
 textColor = "#FFFFFF"
 primaryColor = "#4FA3FF"
 font = "sans serif"
+baseFontSize = 19
 
 [server]
 headless = true
