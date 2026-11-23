@@ -173,10 +173,7 @@ def optimize(p: tm.Params, scen: tuple, eps_list: tuple, backend: str):
 
 
 # ------------------------------------------------------------------------- header
-st.title("🌉 Bridge Toll Optimization: Simplified Model")
-st.caption("Two routes (tolled bridge + free route), steady demand growth, one toll per administration term, "
-           "three scenarios, present bias by term. Traffic equilibrium and economics in Python; "
-           "the toll path is chosen by a mixed-integer program.")
+st.title("🌉 Bridge Toll Optimization")
 
 if not scen:
     st.info("Pick at least one scenario in the sidebar.")
